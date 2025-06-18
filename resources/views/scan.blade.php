@@ -25,24 +25,25 @@
     <p id="message" style="color: red;"></p>
 
     <script>
-        let html5QrCode = new Html5Qrcode("reader");
-        const config = { fps: 10, qrbox: 250 };
+        let html5QrCode = null;
+        const config = {
+            fps: 10,
+            qrbox: 250
+        };
 
-        function onScanSuccess(decodedText, decodedResult) {
+        function onScanSuccess(decodedText) {
             let studentId = decodedText;
 
             // Try to extract ID from URL
             try {
                 const url = new URL(decodedText);
                 const parts = url.pathname.split("/");
-                studentId = parts[parts.length - 1]; // Last part
-            } catch (e) {
-                // Not a URL, use as-is
-            }
+                studentId = parts[parts.length - 1];
+            } catch (e) {}
 
             fetch('http://127.0.0.1:8000/check-student/' + studentId)
                 .then(response => {
-                    if (!response.ok) throw new Error('Invalid response from server');
+                    if (!response.ok) throw new Error('Invalid response');
                     return response.json();
                 })
                 .then(data => {
@@ -60,14 +61,20 @@
         }
 
         function startScanner(cameraId) {
-            html5QrCode.start(
-                cameraId,
-                config,
-                onScanSuccess
-            ).catch(err => {
-                console.error("Start scan error:", err);
-                document.getElementById("message").innerText = "🚫 មិនអាចចាប់ផ្តើមកាមេរ៉ាបានទេ!";
-            });
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                    html5QrCode.start(cameraId, config, onScanSuccess);
+                }).catch(err => {
+                    console.error("Stop failed before restart:", err);
+                });
+            } else {
+                html5QrCode = new Html5Qrcode("reader");
+                html5QrCode.start(cameraId, config, onScanSuccess).catch(err => {
+                    console.error("Start error:", err);
+                    document.getElementById("message").innerText = "🚫 មិនអាចប្រើកាមេរ៉ា!";
+                });
+            }
         }
 
         Html5Qrcode.getCameras().then(cameras => {
@@ -85,22 +92,19 @@
                 cameraSelect.appendChild(option);
             });
 
-            // Start with the first camera by default
+            // Start default camera
             startScanner(cameras[0].id);
 
-            // On camera change
-            cameraSelect.addEventListener("change", function () {
-                html5QrCode.stop().then(() => {
-                    startScanner(this.value);
-                }).catch(err => {
-                    console.error("Stop camera error:", err);
-                });
+            // On change
+            cameraSelect.addEventListener("change", function() {
+                startScanner(this.value);
             });
         }).catch(err => {
             console.error("Camera fetch error:", err);
             document.getElementById("message").innerText = "🚫 មិនអាចទាញយកបញ្ជីកាមេរ៉ាបានទេ!";
         });
     </script>
+
 </body>
 
 </html>
